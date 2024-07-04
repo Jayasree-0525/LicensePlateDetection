@@ -1,0 +1,12 @@
+class RPN(nn.Module):
+    def __init__(self, in_channels, num_anchors):
+        super(RPN, self).__init__()
+        self.conv = nn.Conv2d(256, 256, kernel_size=3, padding=1)
+        self.cls_conv = nn.Conv2d(256, num_anchors * 2, kernel_size=1)  # Objectness score
+        self.reg_conv = nn.Conv2d(256, num_anchors * 4, kernel_size=1)  # Bounding box regression
+        
+    def forward(self, x):
+        x = F.relu(self.conv(x))
+        objectness_score = self.cls_conv(x)
+        bbox_reg = self.reg_conv(x)
+        return objectness_score, bbox_reg
