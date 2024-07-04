@@ -1,1 +1,96 @@
+from google.colab import drive
+drive.mount('/content/drive')
 
+import os
+import cv2 #using OpenCV for this task
+import numpy as np
+from sklearn.svm import SVC
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import accuracy_score
+from skimage.feature import hog # histogram of oriented gradients 
+import matplotlib.pyplot as plt
+
+# Function to extract HOG features from an image and visualize them
+def extract_features(image_path, visualize=False):
+    image = cv2.imread(image_path) #reading the image using OpenCV
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY) #converting to greyscale to simplify and reduce number of channels
+    
+    # Compute HOG features
+    features, hog_image = hog(gray, orientations=9, pixels_per_cell=(8, 8),
+                              cells_per_block=(2, 2), visualize=True, transform_sqrt=True) #hog= Histogram of Gradients 
+    
+    # Ensure all feature vectors have the same length (e.g., by padding or resizing)
+    max_length = 5000  # Example: Set a maximum length for feature vectors
+    if len(features) < max_length:
+        features = np.pad(features, (0, max_length - len(features)), mode='constant')
+    elif len(features) > max_length:
+        features = features[:max_length]  # Trim if too long
+    
+    if visualize:
+        # Visualize HOG features
+        plt.figure(figsize=(8, 4))
+        plt.subplot(121).set_title('Image')
+        plt.imshow(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
+        plt.axis('off')
+        plt.subplot(122).set_title('HOG Features')
+        plt.imshow(hog_image, cmap='gray')
+        plt.axis('off')
+        plt.show()
+    
+    return features
+
+# Function to load dataset
+def load_dataset(dataset_path):
+    images = []
+    labels = []
+    image_files = []  # To store image file paths for result output
+    
+    for image_file in os.listdir(dataset_path): #iterating over images in dataset
+        if image_file.endswith('.jpg') or image_file.endswith('.png'):
+            image_path = os.path.join(dataset_path, image_file)
+            xml_path = os.path.join(dataset_path, image_file.replace('.jpg', '.xml').replace('.png', '.xml'))
+            
+            if os.path.exists(xml_path) and os.stat(xml_path).st_size > 0:
+                
+                labels.append(1) #assign 1 to images with license plate
+            else:
+                
+                labels.append(0) #assign 0 to images without license plate 
+                
+            # Extract features for every image (with or without license plate)
+            features = extract_features(image_path)
+            images.append(features)
+            image_files.append(image_file)  # Store image file path
+
+    # Convert lists to numpy arrays
+    images = np.array(images)
+    labels = np.array(labels)
+
+    return images, labels, image_files
+
+#implementing the code:
+dataset_path = '/content/drive/MyDrive/BaselineModel/' #google drive link to dataset
+images, labels, image_files = load_dataset(dataset_path)
+
+#now, splitting the data into training,validation and testing sets. followed the 60= training, 20= validation, and 20= testing
+X_train, X_test, y_train, y_test, train_files, test_files = train_test_split(images, labels, image_files, test_size=0.2, random_state=42)
+
+svm_classifier = SVC(kernel='linear') #using the linear kernel and initializaing the classifier 
+
+# Train SVM
+svm_classifier.fit(X_train, y_train)
+
+# Predict on test set and visualize results
+y_pred = svm_classifier.predict(X_test)
+
+#evaluating the model accuracy by comparing the pred vs test coordinate 
+accuracy = accuracy_score(y_test, y_pred)
+print(f"Accuracy: {accuracy}")
+
+# for feature extraction visualization
+print("\nResults:")
+for i in range(len(y_pred)):
+    result = "License Plate Detected" if y_pred[i] == 1 else "No License Plate Detected"
+    print(f"{test_files[i]}: {result}")
+    # Visualize HOG features for the current image
+    extract_features(os.path.join(dataset_path, test_files[i]), visualize=True)
